@@ -1,8 +1,24 @@
 # NAME
 
-App::MultiModule::Tasks::Scheduler - Schedule messages, repeated and singletons
+App::MultiModule::Tasks::ResourceWatcher - Manage process resources under App::MultiModule
 
 ## message
+
+# cut
+$VAR1 = \[
+          bless( {
+                   '\_pt\_obj' => bless( {}, 'P9Y::ProcessTable::Table' ),
+                   'priority' => '20',
+                   'uid' => 0,
+                   'sess' => '1',
+                   'environ' => {
+                                  'PATH' => '/sbin:/usr/sbin:/bin:/usr/bin',
+                                  'recovery' => '',
+                                },
+                   'majflt' => 54,
+                   'cwd' => '/'
+                 }, 'P9Y::ProcessTable::Process' ),
+          bless( {
 
 ## set\_config
 
@@ -14,32 +30,32 @@ Dana M. Diederich, `<dana@realms.org>`
 
 # BUGS
 
-Please report any bugs or feature requests through [https://github.com/dana/perl-App-MultiModule-Tasks-Scheduler/issues](https://github.com/dana/perl-App-MultiModule-Tasks-Scheduler/issues).  I will be notified, and then you'll
+Please report any bugs or feature requests through [https://github.com/dana/perl-App-MultiModule-Tasks-ResourceWatcher/issues](https://github.com/dana/perl-App-MultiModule-Tasks-ResourceWatcher/issues).  I will be notified, and then you'll
 automatically be notified of progress on your bug as I make changes.
 
 # SUPPORT
 
 You can find documentation for this module with the perldoc command.
 
-    perldoc App::MultiModule::Tasks::Scheduler
+    perldoc App::MultiModule::Tasks::ResourceWatcher
 
 You can also look for information at:
 
 - Report bugs here:
 
-    [https://github.com/dana/perl-App-MultiModule-Tasks-Scheduler/issues](https://github.com/dana/perl-App-MultiModule-Tasks-Scheduler/issues)
+    [https://github.com/dana/perl-App-MultiModule-Tasks-ResourceWatcher/issues](https://github.com/dana/perl-App-MultiModule-Tasks-ResourceWatcher/issues)
 
 - AnnoCPAN: Annotated CPAN documentation
 
-    [http://annocpan.org/dist/App-MultiModule-Tasks-Scheduler](http://annocpan.org/dist/App-MultiModule-Tasks-Scheduler)
+    [http://annocpan.org/dist/App-MultiModule-Tasks-ResourceWatcher](http://annocpan.org/dist/App-MultiModule-Tasks-ResourceWatcher)
 
 - CPAN Ratings
 
-    [http://cpanratings.perl.org/d/App-MultiModule-Tasks-Scheduler](http://cpanratings.perl.org/d/App-MultiModule-Tasks-Scheduler)
+    [http://cpanratings.perl.org/d/App-MultiModule-Tasks-ResourceWatcher](http://cpanratings.perl.org/d/App-MultiModule-Tasks-ResourceWatcher)
 
 - Search CPAN
 
-    [https://metacpan.org/module/App::MultiModule::Tasks::Scheduler](https://metacpan.org/module/App::MultiModule::Tasks::Scheduler)
+    [https://metacpan.org/module/App::MultiModule::Tasks::ResourceWatcher](https://metacpan.org/module/App::MultiModule::Tasks::ResourceWatcher)
 
 # ACKNOWLEDGEMENTS
 

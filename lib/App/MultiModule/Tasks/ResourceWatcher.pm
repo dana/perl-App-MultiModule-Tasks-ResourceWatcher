@@ -5,6 +5,7 @@ use strict;
 use warnings FATAL => 'all';
 use Data::Dumper;
 use Message::Transform qw(mtransform);
+use P9Y::ProcessTable;
 use Storable;
 
 use parent 'App::MultiModule::Task';
@@ -26,7 +27,136 @@ sub message {
     $self->debug('message', message => $message)
         if $self->{debug} > 5;
     my $state = $self->{state};
+    my $state_watches = $state->{watches};
+    if($message->{watches}) {
+        mtransform($state_watches, $message->{watches});
+    }
 }
+
+sub _get_processes {
+    my $self = shift;
+    my $ret = {};
+    my $ts = time;
+    foreach my $process (P9Y::ProcessTable->table) {
+        $process->{process_uptime} = $ts - $process->{start};
+        $ret->{$process->{pid}} = $process;
+    }
+    return $ret;
+}
+
+sub _fire {
+    my $self = shift;
+    my $level = shift;
+    my $watch_name = shift;
+    my $pid = shift;
+    my $message = {
+        resourceWatcher_level => $level->{level_number},
+        watch_name => $watch_name,
+    };
+    delete $level->{level_number};
+    $message->{resourceWatcher} = Storable::dclone($level);
+    mtransform($message, $level->{transform})
+        if $level->{transform};
+    if(my $actions = $level->{actions}) {
+        if($actions->{signal}) {
+            #we could look at the return value of kill, but if it's zero,
+            #that just means that the process exited beween the time we
+            #gathered all of the processes and now, which is something that
+            #will happen from time to time and isn't notable
+            kill $actions->{signal}, $pid;
+            $message->{resourceWatcher_signal_sent} = $actions->{signal};
+        } else {
+            $self->error("App::MultiModule::Tasks::ResourceWatcher::_fire: called action must currently have a signal attribute. \$watch_name=$watch_name \$level_number=$message->{resourceWatcher_level}");
+        }
+    }
+    $self->emit($message);
+}
+
+sub _tick {
+    my $self = shift;
+    my $watches = Storable::dclone($self->{config}->{watches});
+    my $state_watches = $self->{state}->{watches};
+    mtransform($watches, $state_watches);
+    my $timeout = $self->{config}->{tick_timeout} || 1;
+    eval {
+        local $SIG{ALRM} = sub { die "timed out\n"; };
+        alarm $timeout;
+        my $processes = $self->_get_processes;
+        open my $fh, '>', '/tmp/processes';
+        print $fh '_tick: $processes=' . Data::Dumper::Dumper $processes;
+        close $fh;
+
+        WATCH:
+        foreach my $watch_name (keys %$watches) {
+            my $watch = $watches->{$watch_name};
+            $watch->{levels} = {} unless $watch->{levels};
+            if(my $pid = $watch->{resourceWatcher_PID}) {
+                my $process_info = $processes->{$pid};
+                if(not $process_info) { #the process is gone
+                    if($watch->{no_process}) {
+                        my $message = {
+                            watch_name => $watch_name,
+                        };
+                        mtransform($message, $watch->{no_process}->{transform})
+                            if $watch->{no_process}->{transform};
+                        $self->emit($message);
+                    }
+                    delete $state_watches->{$watch_name};
+                    next WATCH;
+                }
+                #sort numerically descending
+                LEVEL:
+                foreach my $level_number (sort { $b <=> $a } keys %{$watch->{levels}}) {
+                    my $level = $watch->{levels}->{$level_number};
+                    $level->{level_number} = $level_number;
+                    if(my $floor = $level->{floor}) {
+                        my $fire = 1;
+                        foreach my $floor_field (keys %$floor) {
+                            if(not defined $process_info->{$floor_field}) {
+                                $self->error("App::MultiModule::Tasks::ResourceWatcher::_tick: referenced floor_field does not exist in process_info \$watch_name=$watch_name \$level_number=$level_number \$floor_field=$floor_field \$process_info=" . Data::Dumper::Dumper $process_info);
+                                last;
+                            }
+                            #we will not fire if any field in the process
+                            #is below the defined floor
+                            if($process_info->{$floor_field} > $floor->{$floor_field}) {
+                                $fire = 0;
+                            }
+                        }
+                        if($fire) {
+                            $self->_fire($level, $watch_name, $pid);
+                            last LEVEL;
+                        }
+                    } else {
+                        $self->error("App::MultiModule::Tasks::ResourceWatcher::_tick: we currently require each level of each watch to have a floor field \$watch_name=$watch_name \$level_number=$level_number");
+                    }
+                }
+            } else {
+                $self->error("App::MultiModule::Tasks::ResourceWatcher::_tick: we currently require each watch to have a resourceWatcher_PID field  \$watch_name=$watch_name");
+            }
+        }
+    };
+    if($@) {
+        $self->error("App::MultiModule::Tasks::ResourceWatcher::_tick: general exception: $@");
+    }
+    alarm 0;
+}
+=head1 cut
+$VAR1 = [
+          bless( {
+                   '_pt_obj' => bless( {}, 'P9Y::ProcessTable::Table' ),
+                   'priority' => '20',
+                   'uid' => 0,
+                   'sess' => '1',
+                   'environ' => {
+                                  'PATH' => '/sbin:/usr/sbin:/bin:/usr/bin',
+                                  'recovery' => '',
+                                },
+                   'majflt' => 54,
+                   'cwd' => '/'
+                 }, 'P9Y::ProcessTable::Process' ),
+          bless( {
+=cut
+
 
 =head2 set_config
 
@@ -35,14 +165,23 @@ sub set_config {
     my $self = shift;
     my $config = shift;
     $self->{config} = $config;
-    my $state = $self->{state};
+    $self->{config}->{watches} = {} unless $self->{config}->{watches};
+    $self->{state} = {} unless $self->{state};
+    $self->{state}->{watches} = {} unless $self->{state}->{watches};
+    $self->named_recur(
+        recur_name => 'ResourceWatcher_tick',
+        repeat_interval => 1,
+        work => sub {
+            $self->_tick;
+        }
+    );
 }
 
 =head2 is_stateful
 
 =cut
 sub is_stateful {
-    return 'maybe required?';
+    return 'TODO: maybe?';
 }
 
 =head1 AUTHOR
