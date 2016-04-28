@@ -7,6 +7,7 @@ use Data::Dumper;
 use Message::Transform qw(mtransform);
 use P9Y::ProcessTable;
 use Storable;
+use POSIX ":sys_wait_h";
 
 use parent 'App::MultiModule::Task';
 
@@ -82,9 +83,6 @@ sub _tick {
         local $SIG{ALRM} = sub { die "timed out\n"; };
         alarm $timeout;
         my $processes = $self->_get_processes;
-        open my $fh, '>', '/tmp/processes';
-        print $fh '_tick: $processes=' . Data::Dumper::Dumper $processes;
-        close $fh;
 
         WATCH:
         foreach my $watch_name (keys %$watches) {
@@ -118,7 +116,7 @@ sub _tick {
                             }
                             #we will not fire if any field in the process
                             #is below the defined floor
-                            if($process_info->{$floor_field} > $floor->{$floor_field}) {
+                            if($process_info->{$floor_field} < $floor->{$floor_field}) {
                                 $fire = 0;
                             }
                         }
@@ -168,6 +166,16 @@ sub set_config {
     $self->{config}->{watches} = {} unless $self->{config}->{watches};
     $self->{state} = {} unless $self->{state};
     $self->{state}->{watches} = {} unless $self->{state}->{watches};
+    $self->named_recur(
+        recur_name => 'ResourceWatcher_reap-zombies',
+        repeat_interval => 1,
+        work => sub {
+            my $kid;
+            do {
+                $kid = waitpid(-1, WNOHANG);
+            } while $kid > 0;
+        }
+    );
     $self->named_recur(
         recur_name => 'ResourceWatcher_tick',
         repeat_interval => 1,

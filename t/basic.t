@@ -71,15 +71,14 @@ ok IPC::Transit::send(qname => 'ResourceWatcher', message => {
             },
             levels => {
                 '1' => {
-                    floor => {
-                        process_uptime => 11,  
+                    floor => {  #all of these have to be at or above the real value
+                                #for this to fire
+                        process_uptime => 5,  
                     },
                     transform => {  #do this if we meet the criteria
-                        result => 'timeout kill',
+                        result => 'timeout warning',
                     },
-                    actions => {
-                        signal => 'KILL',
-                    },
+                    #and the emit is implicit
                 },
                 '10' => {
                     floor => {
@@ -94,14 +93,15 @@ ok IPC::Transit::send(qname => 'ResourceWatcher', message => {
                     #and the emit is implicit
                 },
                 '100' => {
-                    floor => {  #all of these have to be at or above the real value
-                                #for this to fire
-                        process_uptime => 5,  
+                    floor => {
+                        process_uptime => 11,  
                     },
                     transform => {  #do this if we meet the criteria
-                        result => 'timeout warning',
+                        result => 'timeout kill',
                     },
-                    #and the emit is implicit
+                    actions => {
+                        signal => 'KILL',
+                    },
                 },
             },
         },
@@ -131,7 +131,7 @@ eval {
 alarm 0;
 is $@, "timed out\n", 'collection loop correctly timed out';
 ok my $warning = $messages->{'timeout warning'}, 'timeout warning section exists';
-is $warning->{resourceWatcher_level}, 100, 'warning on correct level(100)';
+is $warning->{resourceWatcher_level}, 1, 'warning on correct level(1)';
 is $warning->{watch_name}, 'basic_thing', 'warning has correct watch_name';
 ok !$warning->{resourceWatcher_signal_sent}, 'warning correctly did not deliver any signal';
 is_deeply($warning->{resourceWatcher}, {
@@ -164,7 +164,7 @@ is_deeply($term->{resourceWatcher}, {
 }, 'level config for term properly merged');
 
 ok my $kill = $messages->{'timeout kill'}, 'timeout kill section exists';
-is $kill->{resourceWatcher_level}, 1, 'kill on correct level(1)';
+is $kill->{resourceWatcher_level}, 100, 'kill on correct level(100)';
 is $kill->{watch_name}, 'basic_thing', 'kill has correct watch_name';
 is $kill->{resourceWatcher_signal_sent}, 'KILL', 'kill delivered correct signal(KILL)';
 is $kill->{ct}, 1, 'verified exactly 1 kill hit';
